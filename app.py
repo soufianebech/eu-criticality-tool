@@ -381,10 +381,6 @@ with colA:
         opt = read_optional_inputs_from_excel(xls, mat["name"])
         #apply_optional_inputs_to_material(mat, mid, opt)
 
-        if opt.get("si_ei") is not None:
-            st.success("Auto-filled SI_EI from Others_inputs_EI.")
-        if opt.get("sr_by_stage"):
-            st.success("Auto-filled IR / EoL-RIR / SI_SR from Others_inputs_SR (when available).")
 
         # EI sheet
         ei_sheet = st.selectbox(
