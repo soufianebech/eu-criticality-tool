@@ -89,8 +89,9 @@ def _to_float(x):
         return None
 
 def set_widget_value(key: str, value):
-    """Force Streamlit widget state update when auto-filling."""
-    st.session_state[key] = value
+    """Set session_state only if the widget/key isn't already instantiated this run."""
+    if key not in st.session_state:
+        st.session_state[key] = value
 
 # -----------------------------
 # Optional inputs from Excel (Others_inputs_EI / Others_inputs_SR)
@@ -151,16 +152,12 @@ def read_optional_inputs_from_excel(xls: pd.ExcelFile, material_name: str):
 
     return out
 
-def apply_optional_inputs_to_material(mat: dict, mid: str, opt: dict):
-    """
-    Apply optional inputs to:
-      - mat dict
-      - st.session_state widget keys (so UI updates immediately)
-    """
+def apply_optional_inputs_to_material(mat: dict, mid: str, opt: dict, fill_si_ei_widget: bool = True):
     # --- SI_EI ---
     if opt.get("si_ei") is not None:
         mat["si_ei"] = float(opt["si_ei"])
-        set_widget_value(f"{mid}_si_ei", float(opt["si_ei"]))
+        if fill_si_ei_widget:
+            set_widget_value(f"{mid}_si_ei", float(opt["si_ei"]))
 
     # --- SR params by stage ---
     for stage_name, vals in opt.get("sr_by_stage", {}).items():
@@ -174,6 +171,7 @@ def apply_optional_inputs_to_material(mat: dict, mid: str, opt: dict):
             if vals.get("si_sr") is not None:
                 mat["sr_inputs"][stage_name]["si_sr"] = float(vals["si_sr"])
                 set_widget_value(f"{mid}_{stage_name}_si_sr", float(vals["si_sr"]))
+
 
 # -----------------------------
 # EI computation from Excel
@@ -379,7 +377,7 @@ with colA:
 
         # ---- NEW: load optional inputs and FORCE widget updates ----
         opt = read_optional_inputs_from_excel(xls, mat["name"])
-        apply_optional_inputs_to_material(mat, mid, opt)
+        apply_optional_inputs_to_material(mat, mid, opt, fill_si_ei_widget=True)
 
         if opt.get("si_ei") is not None:
             st.success("Auto-filled SI_EI from Others_inputs_EI.")
@@ -463,7 +461,7 @@ with colB:
 
             # Optional inputs can be in this file too
             opt = read_optional_inputs_from_excel(xls, mat["name"])
-            apply_optional_inputs_to_material(mat, mid, opt)
+            apply_optional_inputs_to_material(mat, mid, opt, fill_si_ei_widget=False)
 
             hhi_sheet = st.selectbox(
                 f"Select the HHI sheet ({stage_name})",
@@ -620,4 +618,5 @@ ax.set_xlabel("Economic Importance (EI)")
 ax.set_ylabel("Supply Risk (SR) — overall")
 ax.set_title(f"EU Criticality Matrix (overall SR = {sr_mode})")
 st.pyplot(fig)
+
 
