@@ -89,9 +89,8 @@ def _to_float(x):
         return None
 
 def set_widget_value(key: str, value):
-    """Set session_state only if the widget/key isn't already instantiated this run."""
-    if key not in st.session_state:
-        st.session_state[key] = value
+    """Force Streamlit widget state update when auto-filling."""
+    st.session_state[key] = value
 
 # -----------------------------
 # Optional inputs from Excel (Others_inputs_EI / Others_inputs_SR)
@@ -175,8 +174,6 @@ def apply_optional_inputs_to_material(mat: dict, mid: str, opt: dict):
             if vals.get("si_sr") is not None:
                 mat["sr_inputs"][stage_name]["si_sr"] = float(vals["si_sr"])
                 set_widget_value(f"{mid}_{stage_name}_si_sr", float(vals["si_sr"]))
-
-
 
 # -----------------------------
 # EI computation from Excel
