@@ -88,11 +88,9 @@ def _to_float(x):
     except Exception:
         return None
 
-# ✅ SAFE widget-state setter:
-# Only set session_state if the key doesn't exist yet (prevents StreamlitAPIException)
-def set_widget_value_if_absent(key: str, value):
-    if key not in st.session_state:
-        st.session_state[key] = value
+def set_widget_value(key: str, value):
+    """Force Streamlit widget state update when auto-filling."""
+    st.session_state[key] = value
 
 # -----------------------------
 # Optional inputs from Excel (Others_inputs_EI / Others_inputs_SR)
@@ -103,6 +101,7 @@ def read_optional_inputs_from_excel(xls: pd.ExcelFile, material_name: str):
 
     # ---- Others_inputs_EI ----
     if "Others_inputs_EI" in xls.sheet_names:
+        # tokens to locate header even if shifted
         df = read_sheet_safe(xls, "Others_inputs_EI", required_tokens=["material", "si"])
         cols = {_norm(c): c for c in df.columns}
         col_mat = cols.get("material")
@@ -152,33 +151,29 @@ def read_optional_inputs_from_excel(xls: pd.ExcelFile, material_name: str):
 
     return out
 
-def apply_optional_inputs_to_material(mat: dict, mid: str, opt: dict, apply_si_ei: bool = True, apply_sr: bool = True):
+def apply_optional_inputs_to_material(mat: dict, mid: str, opt: dict):
     """
     Apply optional inputs to:
       - mat dict
-      - st.session_state widget keys (only if key not created yet)
-
-    apply_si_ei=False is important in SR stage uploads to avoid StreamlitAPIException.
+      - st.session_state widget keys (so UI updates immediately)
     """
-
     # --- SI_EI ---
-    if apply_si_ei and opt.get("si_ei") is not None:
+    if opt.get("si_ei") is not None:
         mat["si_ei"] = float(opt["si_ei"])
-        set_widget_value_if_absent(f"{mid}_si_ei", float(opt["si_ei"]))
+        set_widget_value(f"{mid}_si_ei", float(opt["si_ei"]))
 
     # --- SR params by stage ---
-    if apply_sr:
-        for stage_name, vals in opt.get("sr_by_stage", {}).items():
-            if stage_name in mat["sr_inputs"]:
-                if vals.get("ir") is not None:
-                    mat["sr_inputs"][stage_name]["ir"] = float(vals["ir"])
-                    set_widget_value_if_absent(f"{mid}_{stage_name}_ir", float(vals["ir"]))
-                if vals.get("eol_rir") is not None:
-                    mat["sr_inputs"][stage_name]["eol_rir"] = float(vals["eol_rir"])
-                    set_widget_value_if_absent(f"{mid}_{stage_name}_eol", float(vals["eol_rir"]))
-                if vals.get("si_sr") is not None:
-                    mat["sr_inputs"][stage_name]["si_sr"] = float(vals["si_sr"])
-                    set_widget_value_if_absent(f"{mid}_{stage_name}_si_sr", float(vals["si_sr"]))
+    for stage_name, vals in opt.get("sr_by_stage", {}).items():
+        if stage_name in mat["sr_inputs"]:
+            if vals.get("ir") is not None:
+                mat["sr_inputs"][stage_name]["ir"] = float(vals["ir"])
+                set_widget_value(f"{mid}_{stage_name}_ir", float(vals["ir"]))
+            if vals.get("eol_rir") is not None:
+                mat["sr_inputs"][stage_name]["eol_rir"] = float(vals["eol_rir"])
+                set_widget_value(f"{mid}_{stage_name}_eol", float(vals["eol_rir"]))
+            if vals.get("si_sr") is not None:
+                mat["sr_inputs"][stage_name]["si_sr"] = float(vals["si_sr"])
+                set_widget_value(f"{mid}_{stage_name}_si_sr", float(vals["si_sr"]))
 
 # -----------------------------
 # EI computation from Excel
@@ -258,9 +253,8 @@ def calc_hhi_from_excel(df: pd.DataFrame, stage_name: str):
 
     if not d_eu.empty:
         ss_sum = pd.to_numeric(d_eu["Supply share"], errors="coerce").sum()
-        # If you want this warning back, uncomment:
-        # if abs(ss_sum - 1.0) > 0.05:
-        #     msgs.append(f"[EU] Supply share sum = {ss_sum:.3f} (not close to 1).")
+        #if abs(ss_sum - 1.0) > 0.05:
+            #msgs.append(f"[EU] Supply share sum = {ss_sum:.3f} (not close to 1).")
         hhi_eu = compute_hhi_wgi_t(d_eu)
 
     if hhi_gs is None:
@@ -356,9 +350,15 @@ with st.sidebar:
 # Main edit panel
 # -----------------------------
 mid = st.session_state.selected_id
-if not mid:
-    st.info("Add at least one material from the sidebar to start.")
-    st.stop()
+
+# --- FIX: handle missing / invalid selected_id ---
+if (mid is None) or (mid not in st.session_state.materials):
+    if st.session_state.material_order:
+        mid = st.session_state.material_order[0]
+        st.session_state.selected_id = mid
+    else:
+        st.info("Add at least one material from the sidebar to start.")
+        st.stop()
 
 mat = st.session_state.materials[mid]
 st.subheader(f"Edit inputs — {mat['name']}")
@@ -377,15 +377,16 @@ with colA:
     if ei_file is not None:
         xls = pd.ExcelFile(ei_file)
 
-        # ✅ Apply optional inputs here (SI_EI + SR params), BEFORE widgets exist
+        # ---- NEW: load optional inputs and FORCE widget updates ----
         opt = read_optional_inputs_from_excel(xls, mat["name"])
-        apply_optional_inputs_to_material(mat, mid, opt, apply_si_ei=True, apply_sr=True)
+        apply_optional_inputs_to_material(mat, mid, opt)
 
         if opt.get("si_ei") is not None:
             st.success("Auto-filled SI_EI from Others_inputs_EI.")
         if opt.get("sr_by_stage"):
             st.success("Auto-filled IR / EoL-RIR / SI_SR from Others_inputs_SR (when available).")
 
+        # EI sheet
         ei_sheet = st.selectbox(
             "Select the EI sheet",
             options=xls.sheet_names,
@@ -399,7 +400,7 @@ with colA:
 
             if scaled_sum_aq is not None:
                 mat["sum_aq_scaled"] = float(scaled_sum_aq)
-                set_widget_value_if_absent(f"{mid}_sum_aq_scaled", float(scaled_sum_aq))
+                set_widget_value(f"{mid}_sum_aq_scaled", float(scaled_sum_aq))
 
                 st.success(f"EI inputs computed from Excel (sheet: {ei_sheet}).")
                 st.write(
@@ -441,7 +442,7 @@ with colA:
     )
 
 # -----------------------------
-# SR block (HHI per stage + show SR)
+# SR block (HHI per stage + show SR) + optional sheets auto-fill already handled above
 # -----------------------------
 with colB:
     st.markdown("## Supply Risk (SR)")
@@ -460,9 +461,9 @@ with colB:
         if hhi_file is not None:
             xls = pd.ExcelFile(hhi_file)
 
-            # ✅ Only apply SR params here (never touch SI_EI in stage upload)
+            # Optional inputs can be in this file too
             opt = read_optional_inputs_from_excel(xls, mat["name"])
-            apply_optional_inputs_to_material(mat, mid, opt, apply_si_ei=False, apply_sr=True)
+            apply_optional_inputs_to_material(mat, mid, opt)
 
             hhi_sheet = st.selectbox(
                 f"Select the HHI sheet ({stage_name})",
@@ -477,10 +478,10 @@ with colB:
 
                 if hhi_gs is not None:
                     d["hhi_gs"] = float(hhi_gs)
-                    set_widget_value_if_absent(f"{mid}_{stage_name}_hhi_gs", float(hhi_gs))
+                    set_widget_value(f"{mid}_{stage_name}_hhi_gs", float(hhi_gs))
                 if hhi_eu is not None:
                     d["hhi_eu"] = float(hhi_eu)
-                    set_widget_value_if_absent(f"{mid}_{stage_name}_hhi_eu", float(hhi_eu))
+                    set_widget_value(f"{mid}_{stage_name}_hhi_eu", float(hhi_eu))
 
                 st.success(f"HHI computed from Excel (sheet: {hhi_sheet}).")
                 st.write(f"(HHI_WGI,t)_GS = {round1(hhi_gs)} ; (HHI_WGI,t)_EU = {round1(hhi_eu)}")
@@ -490,6 +491,7 @@ with colB:
             except Exception as e:
                 st.error(f"HHI Excel error: {e}")
 
+        # Widgets (WITH KEYS) so auto-fill shows up
         d["hhi_gs"] = st.number_input(
             f"(HHI_WGI,t)_GS ({stage_name})",
             min_value=0.0,
@@ -583,11 +585,11 @@ for m_id in st.session_state.material_order:
 
     rows.append({
         "Material": m["name"],
+
         "SR (Extraction)": sr_ex_val,
         "SR (Processing)": sr_pr_val,
         "SR (Overall)": sr_overall,
         "EI": ei_val,
-        "Critical?": "YES" if is_critical else "NO",
     })
 
 df = pd.DataFrame(rows)
