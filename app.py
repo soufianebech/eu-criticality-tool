@@ -620,3 +620,4 @@ ax.set_xlabel("Economic Importance (EI)")
 ax.set_ylabel("Supply Risk (SR) — overall")
 ax.set_title(f"EU Criticality Matrix (overall SR = {sr_mode})")
 st.pyplot(fig)
+
