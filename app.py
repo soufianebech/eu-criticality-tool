@@ -382,7 +382,7 @@ with colA:
 
         # ---- NEW: load optional inputs and FORCE widget updates ----
         opt = read_optional_inputs_from_excel(xls, mat["name"])
-        #apply_optional_inputs_to_material(mat, mid, opt)
+        apply_optional_inputs_to_material(mat, mid, opt)
 
         if opt.get("si_ei") is not None:
             st.success("Auto-filled SI_EI from Others_inputs_EI.")
@@ -466,7 +466,7 @@ with colB:
 
             # Optional inputs can be in this file too
             opt = read_optional_inputs_from_excel(xls, mat["name"])
-            #apply_optional_inputs_to_material(mat, mid, opt)
+            apply_optional_inputs_to_material(mat, mid, opt)
 
             hhi_sheet = st.selectbox(
                 f"Select the HHI sheet ({stage_name})",
