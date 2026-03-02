@@ -152,12 +152,16 @@ def read_optional_inputs_from_excel(xls: pd.ExcelFile, material_name: str):
 
     return out
 
-def apply_optional_inputs_to_material(mat: dict, mid: str, opt: dict, fill_si_ei_widget: bool = True):
+def apply_optional_inputs_to_material(mat: dict, mid: str, opt: dict):
+    """
+    Apply optional inputs to:
+      - mat dict
+      - st.session_state widget keys (so UI updates immediately)
+    """
     # --- SI_EI ---
     if opt.get("si_ei") is not None:
         mat["si_ei"] = float(opt["si_ei"])
-        if fill_si_ei_widget:
-            set_widget_value(f"{mid}_si_ei", float(opt["si_ei"]))
+        set_widget_value(f"{mid}_si_ei", float(opt["si_ei"]))
 
     # --- SR params by stage ---
     for stage_name, vals in opt.get("sr_by_stage", {}).items():
@@ -171,6 +175,7 @@ def apply_optional_inputs_to_material(mat: dict, mid: str, opt: dict, fill_si_ei
             if vals.get("si_sr") is not None:
                 mat["sr_inputs"][stage_name]["si_sr"] = float(vals["si_sr"])
                 set_widget_value(f"{mid}_{stage_name}_si_sr", float(vals["si_sr"]))
+
 
 
 # -----------------------------
@@ -377,7 +382,7 @@ with colA:
 
         # ---- NEW: load optional inputs and FORCE widget updates ----
         opt = read_optional_inputs_from_excel(xls, mat["name"])
-        apply_optional_inputs_to_material(mat, mid, opt, fill_si_ei_widget=True)
+        #apply_optional_inputs_to_material(mat, mid, opt)
 
         if opt.get("si_ei") is not None:
             st.success("Auto-filled SI_EI from Others_inputs_EI.")
@@ -461,7 +466,7 @@ with colB:
 
             # Optional inputs can be in this file too
             opt = read_optional_inputs_from_excel(xls, mat["name"])
-            apply_optional_inputs_to_material(mat, mid, opt, fill_si_ei_widget=False)
+            #apply_optional_inputs_to_material(mat, mid, opt)
 
             hhi_sheet = st.selectbox(
                 f"Select the HHI sheet ({stage_name})",
